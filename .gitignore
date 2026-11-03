@@ -1,0 +1,10 @@
+# Archivos generados por STM32CubeIDE
+Debug/
+Release/
+
+# Archivos temporales
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
