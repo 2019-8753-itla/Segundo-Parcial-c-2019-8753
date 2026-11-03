@@ -1,9 +1,8 @@
 # Segundo Parcial - Microcontroladores
 
 ## Datos del estudiante
-- Nombre: Jose Palma
+- Nombre: Jose Amauris Palma Rosario
 - Matricula: 2019-8753
-- Modalidad: Individual
 
 ## Objetivo
 Desarrollar un monitor de senal analogica con alarma
@@ -55,7 +54,8 @@ en un unico firmware.
 La referencia real se verificara en el montaje.
 
 Formula:
-PCT = redondear(100 * ADC / 4095)
+PCT = redondear (100 * ADC / 4095)
+redondear = llevamos los decimales al entero mas cercano
 
 ## TIMER
 - Periferico: TIM6
