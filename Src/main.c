@@ -78,6 +78,15 @@ volatile uint32_t g_buttonPressCount = 0;
 #define MODE_PAUSE 1U
 
 volatile uint8_t g_systemMode = MODE_RUN;
+
+/* Control de alarma */
+#define ALARM_THRESHOLD_DEFAULT 70U
+#define ALARM_HYSTERESIS         5U
+
+volatile uint8_t g_alarmThreshold = ALARM_THRESHOLD_DEFAULT;
+volatile uint8_t g_alarmActive = 0U;
+
+static uint8_t alarmForceReevaluate = 1U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,6 +97,8 @@ static void MX_TIM6_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 static void Button_Update(uint32_t now);
+
+static void Alarm_Update(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -149,6 +160,7 @@ int main(void)
 
       uint32_t now = g_msTicks;
       Button_Update(now);
+      Alarm_Update();
       g_buttonRaw = (uint8_t)HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
 
       /* ADC cada 100 ms */
@@ -447,6 +459,57 @@ static void Button_Update(uint32_t now)
             }
         }
     }
+}
+
+static void Alarm_Update(void)
+{
+    /* En PAUSE la alarma siempre permanece apagada */
+    if (g_systemMode == MODE_PAUSE)
+    {
+        g_alarmActive = 0U;
+        alarmForceReevaluate = 1U;
+    }
+    else if (g_adcValid == 0U)
+    {
+        /* Sin lectura valida, mantener alarma apagada */
+        g_alarmActive = 0U;
+    }
+    else if (alarmForceReevaluate != 0U)
+    {
+        /* Entrada a RUN: evaluar sin estado anterior */
+        g_alarmActive =
+            (g_adcPct >= g_alarmThreshold) ? 1U : 0U;
+
+        alarmForceReevaluate = 0U;
+    }
+    else if (g_alarmActive == 0U)
+    {
+        /* Encendido al alcanzar el umbral */
+        if (g_adcPct >= g_alarmThreshold)
+        {
+            g_alarmActive = 1U;
+        }
+    }
+    else
+    {
+        /* Apagado con histeresis de 5 puntos */
+        uint8_t lowerThreshold =
+            (g_alarmThreshold >= ALARM_HYSTERESIS)
+            ? (g_alarmThreshold - ALARM_HYSTERESIS)
+            : 0U;
+
+        if (g_adcPct < lowerThreshold)
+        {
+            g_alarmActive = 0U;
+        }
+    }
+
+    /* Actualizar salida fisica PB12 */
+    HAL_GPIO_WritePin(
+        GPIOB,
+        GPIO_PIN_12,
+        (g_alarmActive != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET
+    );
 }
 /* USER CODE END 4 */
 
