@@ -85,3 +85,63 @@ Base temporal, adquisicion ADC y LED de actividad implementados.
 
 Pruebas instrumentales pendientes.
 
+
+
+DIA 3 - 04/11/2026
+
+
+
+Commit 08: 2687731
+
+feat(button): implementar antirrebote no bloqueante
+
+
+
+Commit 09: 30a8450
+
+feat(mode): implementar estados RUN y PAUSE
+
+
+
+Commit 10: d87321c
+
+feat(alarm): implementar alarma con histeresis
+
+
+
+Commit 11:
+
+docs: registrar boton modos y alarma
+
+
+
+Version objetivo: v0.3.0
+
+
+
+Pruebas:
+
+\- Compilacion: 0 errores, 0 warnings.
+
+\- Boton USER PC13 activo en bajo.
+
+\- Alternancia RUN/PAUSE correcta.
+
+\- ADC y LED siguen funcionando durante PAUSE.
+
+\- Alarma con THR=70 y H=5 verificada funcionalmente.
+
+\- Regreso PAUSE a RUN con PCT=68: alarma apagada.
+
+
+
+Pendiente:
+
+\- Verificacion de limites exactos de histeresis.
+
+\- Medicion fisica de PB12.
+
+\- Pruebas instrumentales.
+
+\- Integracion de comandos UART.
+

@@ -234,3 +234,69 @@ Las pruebas analógicas se realizaron con un potenciómetro de 100 kΩ utilizado
 
 \- Implementación de alarma, botón y comunicación UART.
 
+
+## Día 3 — Botón USER, modos RUN/PAUSE y alarma
+
+**Fecha:** 04/11/2026
+
+### 1. Botón USER con antirrebote
+
+- Pin utilizado: PC13.
+- Lógica activa en bajo: suelto = 1, presionado = 0.
+- Antirrebote por software de 30 ms.
+- Implementación no bloqueante utilizando `g_msTicks`.
+- Una sola acción por pulsación válida.
+- Contador de pruebas: `g_buttonPressCount`.
+
+### 2. Modos de funcionamiento
+
+El sistema dispone de dos modos:
+
+- **RUN (0):** funcionamiento normal, con evaluación de la alarma.
+- **PAUSE (1):** alarma desactivada, manteniendo la adquisición ADC y el LED de actividad.
+
+El sistema inicia en RUN. Cada pulsación válida del botón USER alterna entre RUN y PAUSE.
+
+### 3. Alarma con histéresis
+
+- Salida: PB12.
+- Umbral inicial: THR = 70 %.
+- Histéresis: H = 5 puntos porcentuales.
+- Encendido: PCT >= THR.
+- Apagado: PCT < THR - H.
+- Entre ambos límites se conserva el estado anterior.
+- En PAUSE la alarma permanece apagada.
+- Al regresar a RUN se evalúa el último porcentaje ADC válido utilizando THR, sin recuperar automáticamente el estado anterior de la alarma.
+
+### 4. Pruebas funcionales realizadas
+
+| Prueba | Resultado |
+|---|---|
+| Compilación | 0 errores, 0 warnings |
+| Alternancia RUN/PAUSE | Correcta |
+| ADC durante PAUSE | Continúa funcionando |
+| LED durante PAUSE | Continúa parpadeando |
+| Alarma en RUN con 50 % | Apagada |
+| Alarma en RUN con 75 % | Encendida |
+| Descenso a 68 % desde alarma encendida | Permanece encendida |
+| Descenso a 64 % | Apagada |
+| Aumento a 68 % desde alarma apagada | Permanece apagada |
+| Entrada a PAUSE con 80 % | Alarma apagada |
+| Regreso a RUN con 80 % | Alarma encendida |
+| Regreso de PAUSE a RUN con 68 % | Alarma apagada |
+
+### 5. Verificaciones pendientes
+
+- Comprobar los límites exactos de 65 %, 69 % y 70 % mediante pruebas controladas.
+- Verificar físicamente el nivel eléctrico de PB12.
+- Realizar las pruebas instrumentales de temporización.
+- Integrar los comandos UART y comprobar la modificación del umbral mediante `THR n`.
+
+### 6. Control de versiones
+
+- Commit 08: `2687731` — Antirrebote del botón.
+- Commit 09: `30a8450` — Modos RUN/PAUSE.
+- Commit 10: `d87321c` — Alarma con histéresis.
+- Commit 11: Documentación del Día 3.
+
+**Versión objetivo:** `v0.3.0`.
