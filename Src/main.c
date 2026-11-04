@@ -72,6 +72,12 @@ static uint8_t buttonStableState = GPIO_PIN_SET;
 static uint32_t buttonLastChangeMs = 0;
 
 volatile uint32_t g_buttonPressCount = 0;
+
+/* Modos de funcionamiento */
+#define MODE_RUN   0U
+#define MODE_PAUSE 1U
+
+volatile uint8_t g_systemMode = MODE_RUN;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -429,6 +435,15 @@ static void Button_Update(uint32_t now)
             if (buttonStableState == GPIO_PIN_RESET)
             {
                 g_buttonPressCount++;
+
+                if (g_systemMode == MODE_RUN)
+                {
+                    g_systemMode = MODE_PAUSE;
+                }
+                else
+                {
+                    g_systemMode = MODE_RUN;
+                }
             }
         }
     }
