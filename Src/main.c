@@ -61,6 +61,8 @@ static volatile uint8_t adcBusy = 0;
 volatile uint32_t g_adcSampleCount = 0;
 volatile uint32_t g_adcLastInterval = 0;
 volatile uint32_t g_adcLastTime = 0;
+
+static uint32_t ledLastToggleMs = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -126,29 +128,39 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+      /* USER CODE END WHILE */
 
-    /* USER CODE BEGIN 3 */
-	  uint32_t now = g_msTicks;
+      /* USER CODE BEGIN 3 */
 
-	  if ((uint32_t)(now - adcLastSampleMs) >= 100U)
-	  {
-	      adcLastSampleMs += 100U;
+      uint32_t now = g_msTicks;
 
-	      if (adcBusy == 0U)
-	      {
-	          adcBusy = 1U;
+      /* ADC cada 100 ms */
+      if ((uint32_t)(now - adcLastSampleMs) >= 100U)
+      {
+          adcLastSampleMs += 100U;
 
-	          if (HAL_ADC_Start_IT(&hadc1) != HAL_OK)
-	          {
-	              adcBusy = 0U;
-	          }
-	      }
-	  }
+          if (adcBusy == 0U)
+          {
+              adcBusy = 1U;
+
+              if (HAL_ADC_Start_IT(&hadc1) != HAL_OK)
+              {
+                  adcBusy = 0U;
+              }
+          }
+      }
+
+      /* LED cada 500 ms */
+      if ((uint32_t)(now - ledLastToggleMs) >= 500U)
+      {
+          ledLastToggleMs += 500U;
+
+          HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+      }
+      /* USER CODE END 3 */
   }
-  /* USER CODE END 3 */
+      /* USER CODE END WHILE */
 }
-
 /**
   * @brief System Clock Configuration
   * @retval None
