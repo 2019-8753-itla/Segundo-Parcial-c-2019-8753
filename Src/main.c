@@ -50,6 +50,17 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 volatile uint32_t g_msTicks = 0;
+
+volatile uint16_t g_adcValue = 0;
+volatile uint8_t g_adcPct = 0;
+volatile uint8_t g_adcValid = 0;
+
+static uint32_t adcLastSampleMs = 0;
+static volatile uint8_t adcBusy = 0;
+
+volatile uint32_t g_adcSampleCount = 0;
+volatile uint32_t g_adcLastInterval = 0;
+volatile uint32_t g_adcLastTime = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,6 +115,11 @@ int main(void)
   {
       Error_Handler();
   }
+
+  if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
+  {
+      Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -113,6 +129,22 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  uint32_t now = g_msTicks;
+
+	  if ((uint32_t)(now - adcLastSampleMs) >= 100U)
+	  {
+	      adcLastSampleMs += 100U;
+
+	      if (adcBusy == 0U)
+	      {
+	          adcBusy = 1U;
+
+	          if (HAL_ADC_Start_IT(&hadc1) != HAL_OK)
+	          {
+	              adcBusy = 0U;
+	          }
+	      }
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -327,6 +359,28 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     if (htim->Instance == TIM6)
     {
         g_msTicks++;
+    }
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        uint32_t value = HAL_ADC_GetValue(hadc);
+
+        g_adcValue = (uint16_t)value;
+        g_adcPct = (uint8_t)((100UL * value + 2047UL) / 4095UL);
+        g_adcValid = 1;
+        uint32_t now = g_msTicks;
+
+        if (g_adcSampleCount > 0U)
+        {
+            g_adcLastInterval = now - g_adcLastTime;
+        }
+
+        g_adcLastTime = now;
+        g_adcSampleCount++;
+        adcBusy = 0;
     }
 }
 /* USER CODE END 4 */
