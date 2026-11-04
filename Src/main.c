@@ -63,6 +63,15 @@ volatile uint32_t g_adcLastInterval = 0;
 volatile uint32_t g_adcLastTime = 0;
 
 static uint32_t ledLastToggleMs = 0;
+
+volatile uint8_t g_buttonRaw = 0;
+
+/* Control del boton USER B1 - PC13 */
+static uint8_t buttonRawState = GPIO_PIN_SET;
+static uint8_t buttonStableState = GPIO_PIN_SET;
+static uint32_t buttonLastChangeMs = 0;
+
+volatile uint32_t g_buttonPressCount = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,7 +81,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void Button_Update(uint32_t now);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -133,6 +142,8 @@ int main(void)
       /* USER CODE BEGIN 3 */
 
       uint32_t now = g_msTicks;
+      Button_Update(now);
+      g_buttonRaw = (uint8_t)HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
 
       /* ADC cada 100 ms */
       if ((uint32_t)(now - adcLastSampleMs) >= 100U)
@@ -393,6 +404,33 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
         g_adcLastTime = now;
         g_adcSampleCount++;
         adcBusy = 0;
+    }
+}
+
+static void Button_Update(uint32_t now)
+{
+    uint8_t raw = (uint8_t)HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+
+    /* Detectar cualquier cambio instantaneo */
+    if (raw != buttonRawState)
+    {
+        buttonRawState = raw;
+        buttonLastChangeMs = now;
+    }
+
+    /* Confirmar que el estado lleva 30 ms estable */
+    if ((uint32_t)(now - buttonLastChangeMs) >= 30U)
+    {
+        if (buttonStableState != buttonRawState)
+        {
+            buttonStableState = buttonRawState;
+
+            /* Pulsacion valida: PC13 pasa a nivel bajo */
+            if (buttonStableState == GPIO_PIN_RESET)
+            {
+                g_buttonPressCount++;
+            }
+        }
     }
 }
 /* USER CODE END 4 */
