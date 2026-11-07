@@ -24,6 +24,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include <string.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,6 +94,19 @@ static uint8_t alarmForceReevaluate = 1U;
 static uint8_t uartWelcomeMsg[] =
     "\r\nSEGUNDO PARCIAL - STM32\r\n"
     "UART USART2 INICIADA\r\n";
+
+/* Recepcion UART por interrupciones */
+#define UART_RX_BUFFER_SIZE 64U
+
+static uint8_t uartRxByte;
+
+static char uartRxBuffer[UART_RX_BUFFER_SIZE];
+static char uartCommand[UART_RX_BUFFER_SIZE];
+
+static volatile uint8_t uartCommandReady = 0U;
+static volatile uint8_t uartRxIndex = 0U;
+static volatile uint32_t uartLinesReceived = 0U;
+static volatile uint32_t uartRxOverflowCount = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -161,6 +176,12 @@ int main(void)
       sizeof(uartWelcomeMsg) - 1U,
       100U
   );
+
+  /* Iniciar recepcion UART por interrupciones */
+  if (HAL_UART_Receive_IT(&huart2, &uartRxByte, 1U) != HAL_OK)
+  {
+      Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -198,6 +219,20 @@ int main(void)
           ledLastToggleMs += 500U;
 
           HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
+      }
+
+      /* Procesar una linea UART recibida */
+      if (uartCommandReady != 0U)
+      {
+          /*
+           * En este punto uartCommand contiene
+           * una linea completa y terminada en '\0'.
+           *
+           * El Commit 14 agregara aqui
+           * el procesamiento de comandos.
+           */
+
+          uartCommandReady = 0U;
       }
       /* USER CODE END 3 */
   }
@@ -523,6 +558,62 @@ static void Alarm_Update(void)
         GPIO_PIN_12,
         (g_alarmActive != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET
     );
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        char receivedChar = (char)uartRxByte;
+
+        if (receivedChar == '\r' || receivedChar == '\n')
+        {
+            if (uartRxIndex > 0U)
+            {
+                if (uartCommandReady == 0U)
+                {
+                    uartRxBuffer[uartRxIndex] = '\0';
+
+                    memcpy(
+                        uartCommand,
+                        uartRxBuffer,
+                        (size_t)uartRxIndex + 1U
+                    );
+
+                    uartLinesReceived++;
+                    uartCommandReady = 1U;
+                }
+                else
+                {
+                    uartRxOverflowCount++;
+                }
+
+                uartRxIndex = 0U;
+            }
+        }
+        else
+        {
+            if (uartCommandReady == 0U)
+            {
+                if (uartRxIndex < (UART_RX_BUFFER_SIZE - 1U))
+                {
+                    uartRxBuffer[uartRxIndex] = receivedChar;
+                    uartRxIndex++;
+                }
+                else
+                {
+                    uartRxIndex = 0U;
+                    uartRxOverflowCount++;
+                }
+            }
+        }
+
+        (void)HAL_UART_Receive_IT(
+            &huart2,
+            &uartRxByte,
+            1U
+        );
+    }
 }
 /* USER CODE END 4 */
 
