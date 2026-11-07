@@ -87,6 +87,11 @@ volatile uint8_t g_alarmThreshold = ALARM_THRESHOLD_DEFAULT;
 volatile uint8_t g_alarmActive = 0U;
 
 static uint8_t alarmForceReevaluate = 1U;
+
+/* Mensaje de bienvenida UART */
+static uint8_t uartWelcomeMsg[] =
+    "\r\nSEGUNDO PARCIAL - STM32\r\n"
+    "UART USART2 INICIADA\r\n";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -148,6 +153,14 @@ int main(void)
   {
       Error_Handler();
   }
+
+  /* Enviar mensaje de bienvenida por USART2 */
+  HAL_UART_Transmit(
+      &huart2,
+      uartWelcomeMsg,
+      sizeof(uartWelcomeMsg) - 1U,
+      100U
+  );
   /* USER CODE END 2 */
 
   /* Infinite loop */
