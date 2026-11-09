@@ -711,10 +711,15 @@ static uint8_t UART_TxEnqueue(const char *message)
         return 0U;
     }
 
+    /* Proteger la cola frente a la interrupcion UART */
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
     /* Verificar que existe espacio en la cola */
     if (uartTxCount >= UART_TX_QUEUE_SIZE)
     {
         uartTxOverflowCount++;
+        __set_PRIMASK(primask);
         return 0U;
     }
 
@@ -726,6 +731,9 @@ static uint8_t UART_TxEnqueue(const char *message)
 
     uartTxCount++;
 
+    /* Restaurar el estado anterior de las interrupciones */
+    __set_PRIMASK(primask);
+
     return 1U;
 }
 
@@ -733,27 +741,37 @@ static void UART_TxStartNext(void)
 {
     uint8_t tail;
 
-    /* No iniciar otra transmision si UART esta ocupada */
-    if (uartTxBusy != 0U)
+    /* Guardar el estado actual de las interrupciones */
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    /* No iniciar si UART esta ocupada o la cola esta vacia */
+    if (uartTxBusy != 0U || uartTxCount == 0U)
     {
+        __set_PRIMASK(primask);
         return;
     }
 
-    /* No hay mensajes pendientes */
-    if (uartTxCount == 0U)
-    {
-        return;
-    }
-
+    /* Reservar el mensaje que vamos a transmitir */
     tail = uartTxTail;
     uartTxBusy = 1U;
 
+    /* Restaurar las interrupciones antes de iniciar UART */
+    __set_PRIMASK(primask);
+
+    /* Iniciar transmision sin bloquear el programa */
     if (HAL_UART_Transmit_IT(
             &huart2,
             (uint8_t *)uartTxQueue[tail],
             (uint16_t)strlen(uartTxQueue[tail])) != HAL_OK)
     {
+        /* Liberar el estado ocupado si no pudo iniciar */
+        primask = __get_PRIMASK();
+        __disable_irq();
+
         uartTxBusy = 0U;
+
+        __set_PRIMASK(primask);
     }
 }
 
