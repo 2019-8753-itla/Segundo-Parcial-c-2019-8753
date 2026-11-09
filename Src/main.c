@@ -25,6 +25,7 @@
 /* USER CODE BEGIN Includes */
 
 #include <string.h>
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -65,6 +66,7 @@ volatile uint32_t g_adcLastInterval = 0;
 volatile uint32_t g_adcLastTime = 0;
 
 static uint32_t ledLastToggleMs = 0;
+static uint32_t uartLastTelemetryMs = 0U;
 
 volatile uint8_t g_buttonRaw = 0;
 
@@ -96,17 +98,55 @@ static uint8_t uartWelcomeMsg[] =
     "UART USART2 INICIADA\r\n";
 
 /* Recepcion UART por interrupciones */
-#define UART_RX_BUFFER_SIZE 64U
+#define UART_MAX_LINE_LENGTH 32U
+#define UART_RX_BUFFER_SIZE (UART_MAX_LINE_LENGTH + 1U)
 
 static uint8_t uartRxByte;
 
-static char uartRxBuffer[UART_RX_BUFFER_SIZE];
-static char uartCommand[UART_RX_BUFFER_SIZE];
+#define UART_QUEUE_SIZE 8U
 
-static volatile uint8_t uartCommandReady = 0U;
-static volatile uint8_t uartRxIndex = 0U;
+#define UART_EVENT_COMMAND 1U
+#define UART_EVENT_ERROR   2U
+
+typedef struct
+{
+    uint8_t type;
+    char text[UART_RX_BUFFER_SIZE];
+} UART_Event_t;
+
+static uint8_t uartRxIndex = 0U;
+static char uartRxBuffer[UART_RX_BUFFER_SIZE];
+
+/* Cola FIFO de eventos UART */
+static UART_Event_t uartQueue[UART_QUEUE_SIZE];
+
+static volatile uint8_t uartQueueHead = 0U;
+static volatile uint8_t uartQueueTail = 0U;
+static volatile uint8_t uartQueueCount = 0U;
+
+/* Cola de transmision UART */
+#define UART_TX_QUEUE_SIZE 8U
+#define UART_TX_MESSAGE_SIZE 96U
+
+static char uartTxQueue[UART_TX_QUEUE_SIZE][UART_TX_MESSAGE_SIZE];
+
+static volatile uint8_t uartTxHead = 0U;
+static volatile uint8_t uartTxTail = 0U;
+static volatile uint8_t uartTxCount = 0U;
+static volatile uint8_t uartTxBusy = 0U;
+
+static volatile uint32_t uartTxOverflowCount = 0U;
+
+/* Indica que la linea actual debe descartarse hasta LF */
+static volatile uint8_t uartDiscardLine = 0U;
+
+/* Estadisticas de recepcion */
 static volatile uint32_t uartLinesReceived = 0U;
 static volatile uint32_t uartRxOverflowCount = 0U;
+
+
+
+static const char uartErrorMsg[] = "ERR\r\n";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,6 +159,17 @@ static void MX_USART2_UART_Init(void);
 static void Button_Update(uint32_t now);
 
 static void Alarm_Update(void);
+
+static void UART_SendResponse(const char *message);
+
+static void UART_SendStatus(void);
+
+static uint8_t UART_ParseThreshold(const char *command, uint8_t *threshold);
+static void UART_QueuePush(uint8_t type, const char *text);
+
+static uint8_t UART_TxEnqueue(const char *message);
+static void UART_TxStartNext(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -221,19 +272,108 @@ int main(void)
           HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
       }
 
-      /* Procesar una linea UART recibida */
-      if (uartCommandReady != 0U)
+      /* Telemetria automatica cada 1000 ms */
+      if ((uint32_t)(now - uartLastTelemetryMs) >= 1000U)
       {
-          /*
-           * En este punto uartCommand contiene
-           * una linea completa y terminada en '\0'.
-           *
-           * El Commit 14 agregara aqui
-           * el procesamiento de comandos.
-           */
-
-          uartCommandReady = 0U;
+          uartLastTelemetryMs += 1000U;
+          UART_SendStatus();
       }
+
+      /* Procesar una linea UART recibida */
+      /* Procesar el siguiente evento UART de la cola FIFO */
+      if (uartQueueCount > 0U)
+      {
+          UART_Event_t eventToProcess;
+          uint8_t hasEvent = 0U;
+
+          /* Extraer el evento de forma segura */
+          __disable_irq();
+
+          if (uartQueueCount > 0U)
+          {
+              eventToProcess = uartQueue[uartQueueTail];
+
+              uartQueueTail =
+                  (uint8_t)((uartQueueTail + 1U) % UART_QUEUE_SIZE);
+
+              uartQueueCount--;
+              hasEvent = 1U;
+          }
+
+          __enable_irq();
+
+          if (hasEvent != 0U)
+          {
+              if (eventToProcess.type == UART_EVENT_ERROR)
+              {
+                  UART_SendResponse(uartErrorMsg);
+              }
+              else if (eventToProcess.type == UART_EVENT_COMMAND)
+              {
+                  const char *commandToProcess = eventToProcess.text;
+
+                  if (strcmp(commandToProcess, "STATUS") == 0)
+                  {
+                      UART_SendStatus();
+                  }
+                  else if (strcmp(commandToProcess, "STOP") == 0)
+                  {
+                      g_systemMode = MODE_PAUSE;
+                      Alarm_Update();
+
+                      UART_SendResponse("OK PAUSE\r\n");
+                  }
+                  else if (strcmp(commandToProcess, "START") == 0)
+                  {
+                      if (g_systemMode == MODE_PAUSE)
+                      {
+                          g_systemMode = MODE_RUN;
+                          Alarm_Update();
+                      }
+
+                      UART_SendResponse("OK RUN\r\n");
+                  }
+                  else if (strncmp(commandToProcess, "THR ", 4U) == 0)
+                  {
+                      uint8_t newThreshold;
+
+                      if (UART_ParseThreshold(
+                              commandToProcess,
+                              &newThreshold) != 0U)
+                      {
+                          char response[24];
+
+                          g_alarmThreshold = newThreshold;
+
+                          if (g_systemMode == MODE_RUN)
+                          {
+                              alarmForceReevaluate = 1U;
+                              Alarm_Update();
+                          }
+
+                          snprintf(
+                              response,
+                              sizeof(response),
+                              "OK THR=%u\r\n",
+                              (unsigned int)newThreshold
+                          );
+
+                          UART_SendResponse(response);
+                      }
+                      else
+                      {
+                          UART_SendResponse(uartErrorMsg);
+                      }
+                  }
+                  else
+                  {
+                      UART_SendResponse(uartErrorMsg);
+                  }
+              }
+          }
+      }
+      /* Iniciar el siguiente mensaje pendiente de la cola TX */
+      UART_TxStartNext();
       /* USER CODE END 3 */
   }
       /* USER CODE END WHILE */
@@ -560,54 +700,249 @@ static void Alarm_Update(void)
     );
 }
 
+static uint8_t UART_TxEnqueue(const char *message)
+{
+    size_t length = strlen(message);
+
+    /* Verificar que el mensaje cabe en el buffer */
+    if (length == 0U || length >= UART_TX_MESSAGE_SIZE)
+    {
+        uartTxOverflowCount++;
+        return 0U;
+    }
+
+    /* Verificar que existe espacio en la cola */
+    if (uartTxCount >= UART_TX_QUEUE_SIZE)
+    {
+        uartTxOverflowCount++;
+        return 0U;
+    }
+
+    /* Guardar el mensaje completo */
+    memcpy(uartTxQueue[uartTxHead], message, length + 1U);
+
+    uartTxHead =
+        (uint8_t)((uartTxHead + 1U) % UART_TX_QUEUE_SIZE);
+
+    uartTxCount++;
+
+    return 1U;
+}
+
+static void UART_TxStartNext(void)
+{
+    uint8_t tail;
+
+    /* No iniciar otra transmision si UART esta ocupada */
+    if (uartTxBusy != 0U)
+    {
+        return;
+    }
+
+    /* No hay mensajes pendientes */
+    if (uartTxCount == 0U)
+    {
+        return;
+    }
+
+    tail = uartTxTail;
+    uartTxBusy = 1U;
+
+    if (HAL_UART_Transmit_IT(
+            &huart2,
+            (uint8_t *)uartTxQueue[tail],
+            (uint16_t)strlen(uartTxQueue[tail])) != HAL_OK)
+    {
+        uartTxBusy = 0U;
+    }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        if ((uartTxBusy != 0U) && (uartTxCount > 0U))
+        {
+            /* Retirar el mensaje que termino de transmitirse */
+            uartTxTail =
+                (uint8_t)((uartTxTail + 1U) % UART_TX_QUEUE_SIZE);
+
+            uartTxCount--;
+        }
+
+        uartTxBusy = 0U;
+    }
+}
+
+static void UART_SendResponse(const char *message)
+{
+    /* Guardar el mensaje para transmitirlo sin bloquear */
+    (void)UART_TxEnqueue(message);
+}
+
+static void UART_SendStatus(void)
+{
+    char statusLine[96];
+
+    uint32_t now = g_msTicks;
+    uint16_t adc = g_adcValue;
+    uint8_t pct = g_adcPct;
+    uint8_t threshold = g_alarmThreshold;
+    uint8_t mode = g_systemMode;
+    uint8_t alarm = g_alarmActive;
+
+    int length = snprintf(
+        statusLine,
+        sizeof(statusLine),
+        "t=%lu;ADC=%u;PCT=%u;THR=%u;MODE=%s;ALARM=%u\r\n",
+        (unsigned long)now,
+        (unsigned int)adc,
+        (unsigned int)pct,
+        (unsigned int)threshold,
+        (mode == MODE_RUN) ? "RUN" : "PAUSE",
+        (unsigned int)alarm
+    );
+
+    if (length > 0 && length < (int)sizeof(statusLine))
+    {
+        UART_SendResponse(statusLine);
+    }
+}
+
+static uint8_t UART_ParseThreshold(const char *command, uint8_t *threshold)
+{
+    uint32_t value = 0U;
+    uint32_t index = 4U;
+
+    /* El comando debe comenzar exactamente con "THR " */
+    if (strncmp(command, "THR ", 4U) != 0)
+    {
+        return 0U;
+    }
+
+    /* Debe existir al menos un digito */
+    if (command[index] == '\0')
+    {
+        return 0U;
+    }
+
+    /* Solo se permiten digitos decimales */
+    while (command[index] != '\0')
+    {
+        char character = command[index];
+
+        if (character < '0' || character > '9')
+        {
+            return 0U;
+        }
+
+        value = (value * 10U) + (uint32_t)(character - '0');
+
+        /* Rechazar valores fuera de rango */
+        if (value > 95U)
+        {
+            return 0U;
+        }
+
+        index++;
+    }
+
+    if (value < 10U)
+    {
+        return 0U;
+    }
+
+    *threshold = (uint8_t)value;
+
+    return 1U;
+}
+
+static void UART_QueuePush(uint8_t type, const char *text)
+{
+    uint8_t head = uartQueueHead;
+
+    /* No sobrescribir eventos pendientes */
+    if (uartQueueCount >= UART_QUEUE_SIZE)
+    {
+        uartRxOverflowCount++;
+        return;
+    }
+
+    uartQueue[head].type = type;
+
+    if ((type == UART_EVENT_COMMAND) && (text != NULL))
+    {
+        size_t length = strlen(text);
+
+        if (length > UART_MAX_LINE_LENGTH)
+        {
+            length = UART_MAX_LINE_LENGTH;
+        }
+
+        memcpy(uartQueue[head].text, text, length);
+        uartQueue[head].text[length] = '\0';
+    }
+    else
+    {
+        uartQueue[head].text[0] = '\0';
+    }
+
+    uartQueueHead = (uint8_t)((head + 1U) % UART_QUEUE_SIZE);
+    uartQueueCount++;
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART2)
     {
         char receivedChar = (char)uartRxByte;
 
-        if (receivedChar == '\r' || receivedChar == '\n')
+        if (receivedChar == '\n')
         {
-            if (uartRxIndex > 0U)
+            if (uartDiscardLine != 0U)
             {
-                if (uartCommandReady == 0U)
-                {
-                    uartRxBuffer[uartRxIndex] = '\0';
+                /* Linea demasiado larga: generar un solo ERR */
+                UART_QueuePush(UART_EVENT_ERROR, NULL);
 
-                    memcpy(
-                        uartCommand,
-                        uartRxBuffer,
-                        (size_t)uartRxIndex + 1U
-                    );
+                uartRxOverflowCount++;
+                uartRxIndex = 0U;
+                uartDiscardLine = 0U;
+            }
+            else if (uartRxIndex > 0U)
+            {
+                /* Linea completa: guardar el comando en la FIFO */
+                uartRxBuffer[uartRxIndex] = '\0';
 
-                    uartLinesReceived++;
-                    uartCommandReady = 1U;
-                }
-                else
-                {
-                    uartRxOverflowCount++;
-                }
+                UART_QueuePush(
+                    UART_EVENT_COMMAND,
+                    uartRxBuffer
+                );
 
+                uartLinesReceived++;
                 uartRxIndex = 0U;
             }
+            /* Las lineas vacias se ignoran */
         }
-        else
+        else if (receivedChar == '\r')
         {
-            if (uartCommandReady == 0U)
+            /* Ignorar CR y esperar LF */
+        }
+        else if (uartDiscardLine == 0U)
+        {
+            if (uartRxIndex < UART_MAX_LINE_LENGTH)
             {
-                if (uartRxIndex < (UART_RX_BUFFER_SIZE - 1U))
-                {
-                    uartRxBuffer[uartRxIndex] = receivedChar;
-                    uartRxIndex++;
-                }
-                else
-                {
-                    uartRxIndex = 0U;
-                    uartRxOverflowCount++;
-                }
+                uartRxBuffer[uartRxIndex] = receivedChar;
+                uartRxIndex++;
+            }
+            else
+            {
+                /* Descartar hasta recibir LF */
+                uartRxIndex = 0U;
+                uartDiscardLine = 1U;
             }
         }
 
+        /* Reactivar la recepcion del siguiente byte */
         (void)HAL_UART_Receive_IT(
             &huart2,
             &uartRxByte,
