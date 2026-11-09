@@ -89,19 +89,48 @@ Tareas previstas:
 * Stop bits: 1
 * Recepcion: interrupciones habilitadas
 
-Comandos por implementar:
+### Comandos UART implementados
 
-* STATUS
-* THR n
-* START
-* STOP
+| Comando | Funcion | Respuesta |
+|---|---|---|
+| STATUS | Consultar el estado del sistema | t=...;ADC=...;PCT=...;THR=...;MODE=...;ALARM=... |
+| THR n | Configurar umbral entre 10 y 95 | OK THR=n |
+| START | Activar modo RUN | OK RUN |
+| STOP | Activar modo PAUSE | OK PAUSE |
+| Comando invalido | Rechazar comando | ERR |
+
+Caracteristicas:
+
+* Comunicacion USART2 a 115200 baudios, 8N1.
+* Recepcion UART mediante interrupciones.
+* Transmision UART mediante interrupciones.
+* Colas FIFO para recepcion y transmision.
+* Comandos terminados en LF o CRLF.
+* Longitud maxima de comando: 32 caracteres.
+* Telemetria automatica cada 1000 ms.
+* Telemetria activa durante RUN y PAUSE.
+* Comandos sensibles a mayusculas y minusculas.
 
 ## Estado actual
 
-* Proyecto base compilado correctamente.
-* Perifericos configurados en STM32CubeIDE.
-* Firmware funcional pendiente de implementar.
-* Pruebas P01 a P10 pendientes.
+
+* Proyecto integrado en la placa NUCLEO-F302R8.
+* TIM6 configurado como base temporal de 1 ms.
+* ADC1 funcionando con adquisicion cada 100 ms.
+* LED de actividad PB13 funcionando cada 500 ms.
+* Boton USER PC13 con antirrebote de 30 ms.
+* Modos RUN y PAUSE implementados.
+* Alarma fisica PB12 funcionando con umbral configurable e histeresis de 5 puntos porcentuales.
+* USART2 funcionando a 115200 baudios, 8N1.
+* Comandos STATUS, THR n, START y STOP implementados.
+* Telemetria automatica cada 1000 ms.
+* Colas FIFO UART RX y TX implementadas.
+* Compilacion verificada con 0 errores y 0 warnings.
+* Pruebas funcionales de ADC, GPIO, alarma y UART realizadas satisfactoriamente.
+* Prueba de estres UART de 30 segundos ejecutada: 142 comandos enviados y 172 lineas completas recibidas.
+* P10 pendiente de cierre formal: investigar un ERR aislado y verificar latencia de respuesta menor o igual a 100 ms.
+* Firmware respaldado en GitHub hasta el commit 15.
+* Pendiente: documentacion final, evidencias y verificaciones instrumentales.
 
 ## Compilacion
 
@@ -122,51 +151,51 @@ despues de ejecutar cada prueba.
 
 
 
-\## Día 2 — Implementación de TIMER, ADC y GPIO
+## Día 2 — Implementación de TIMER, ADC y GPIO
 
 
 
-\*\*Fecha:\*\* 03/11/2026
+**Fecha:** 03/11/2026
 
 
 
-\### Funcionalidades implementadas
+### Funcionalidades implementadas
 
 
 
-\*\*1. Base temporal TIM6\*\*
+**1. Base temporal TIM6**
 
 
 
-\- Configuración del TIMER con frecuencia de entrada de 8 MHz.
+- Configuración del TIMER con frecuencia de entrada de 8 MHz.
 
-\- Prescaler: 79.
+- Prescaler: 79.
 
-\- Auto-reload (ARR): 99.
+- Auto-reload (ARR): 99.
 
-\- Período calculado: 1 ms.
+- Período calculado: 1 ms.
 
-\- Contador global `g\_msTicks`, actualizado mediante interrupciones.
-
-
-
-\*\*2. Adquisición ADC1\*\*
+- Contador global `g_msTicks`, actualizado mediante interrupciones.
 
 
 
-\- Canal: ADC1\_IN1 (PA0).
+**2. Adquisición ADC1**
 
-\- Resolución: 12 bits.
 
-\- Rango digital: 0–4095.
 
-\- Adquisición programada cada 100 ms.
+- Canal: ADC1_IN1 (PA0).
 
-\- Conversión mediante interrupciones.
+- Resolución: 12 bits.
 
-\- Calibración al iniciar el programa.
+- Rango digital: 0–4095.
 
-\- Conversión a porcentaje entero mediante redondeo.
+- Adquisición programada cada 100 ms.
+
+- Conversión mediante interrupciones.
+
+- Calibración al iniciar el programa.
+
+- Conversión a porcentaje entero mediante redondeo.
 
 
 
@@ -178,21 +207,21 @@ Fórmula:
 
 
 
-\*\*3. LED de actividad\*\*
+**3. LED de actividad**
 
 
 
-\- Pin: PB13.
+- Pin: PB13.
 
-\- Cambio de estado cada 500 ms.
+- Cambio de estado cada 500 ms.
 
-\- Implementación no bloqueante mediante el contador TIM6.
+- Implementación no bloqueante mediante el contador TIM6.
 
-\- Funcionamiento simultáneo con ADC1.
+- Funcionamiento simultáneo con ADC1.
 
 
 
-\### Pruebas realizadas
+### Pruebas realizadas
 
 
 
@@ -222,17 +251,17 @@ Las pruebas analógicas se realizaron con un potenciómetro de 100 kΩ utilizado
 
 
 
-\### Verificaciones pendientes
+### Verificaciones pendientes
 
 
 
-\- Medición instrumental de los períodos de 1 ms, 100 ms y 500 ms.
+- Medición instrumental de los períodos de 1 ms, 100 ms y 500 ms.
 
-\- Comprobación de precisión ADC con voltajes medidos.
+- Comprobación de precisión ADC con voltajes medidos.
 
-\- Pruebas formales P01–P10 del examen.
+- Pruebas formales P01–P10 del examen.
 
-\- Implementación de alarma, botón y comunicación UART.
+- Implementación de alarma, botón y comunicación UART.
 
 
 ## Día 3 — Botón USER, modos RUN/PAUSE y alarma
@@ -300,3 +329,108 @@ El sistema inicia en RUN. Cada pulsación válida del botón USER alterna entre 
 - Commit 11: Documentación del Día 3.
 
 **Versión objetivo:** `v0.3.0`.
+
+
+
+## Dia 4 - Integracion UART, telemetria y pruebas
+
+**Fecha:** 08/11/2026
+
+### 1. Comunicacion UART
+
+Se implemento USART2 a 115200 baudios, 8 bits de datos,
+sin paridad y 1 bit de parada (8N1).
+
+La recepcion se realiza mediante interrupciones y una
+cola FIFO de eventos. Los comandos se interpretan fuera
+de las interrupciones, dentro del ciclo principal.
+
+La transmision utiliza interrupciones y una cola FIFO
+de mensajes completos, para evitar que las respuestas
+y la telemetria mezclen sus caracteres.
+
+### 2. Comandos implementados
+
+- STATUS: consulta inmediata del estado del sistema.
+- THR n: configura el umbral entre 10 y 95.
+- START: activa el modo RUN.
+- STOP: activa el modo PAUSE.
+- Comandos invalidos: respuesta ERR.
+
+Los comandos distinguen mayusculas y minusculas y
+terminan con LF o CRLF.
+
+La longitud maxima permitida es de 32 caracteres.
+Una linea demasiado larga se descarta hasta LF y
+produce una respuesta ERR.
+
+### 3. Formato de telemetria
+
+Ejemplo:
+
+`t=1200;ADC=2866;PCT=70;THR=70;MODE=RUN;ALARM=1`
+
+Campos:
+
+- t: tiempo transcurrido en milisegundos.
+- ADC: lectura analogica de 0 a 4095.
+- PCT: porcentaje entero de 0 a 100.
+- THR: umbral configurado.
+- MODE: RUN o PAUSE.
+- ALARM: 0 (apagada) o 1 (encendida).
+
+La telemetria se programa cada 1000 ms y continua
+durante los modos RUN y PAUSE.
+
+### 4. Pruebas funcionales realizadas
+
+| Verificacion | Resultado |
+|---|---|
+| Compilacion | 0 errores y 0 warnings |
+| Comando STATUS | Correcto |
+| Comando START | Correcto |
+| Comando STOP | Correcto |
+| Comando THR n | Correcto |
+| Rechazo de umbrales invalidos | Correcto |
+| Rechazo de linea de 33 caracteres | Correcto en prueba manual |
+| Telemetria automatica | Funcionando |
+| Telemetria durante PAUSE | Funcionando |
+| LED de alarma PB12 | Verificado fisicamente |
+| Histeresis de 5 puntos | Verificada con potenciometro |
+| Recuperacion tras prueba de carga | Correcta |
+
+### 5. Prueba de estres UART
+
+Se ejecuto una prueba automatizada de aproximadamente
+30 segundos utilizando PowerShell y el puerto COM5.
+
+Resultados registrados:
+
+- Comandos STATUS enviados: 142.
+- Lineas completas recibidas: 172.
+- Lineas con formato de telemetria valido: 171.
+- Respuestas ERR inesperadas: 1.
+
+Posteriormente se enviaron cinco comandos STATUS
+manualmente mediante PuTTY, todos con respuesta correcta.
+
+La prueba demuestra continuidad de la comunicacion,
+pero no certifica todavia ausencia total de respuestas
+perdidas ni latencia maxima de 100 ms.
+
+### 6. Verificaciones pendientes
+
+- Investigar el ERR aislado durante la prueba de carga.
+- Medir latencia de respuestas UART (limite: 100 ms).
+- Completar P10 alternando RUN/PAUSE y variando el ADC.
+- Verificar instrumentalmente las tolerancias temporales.
+- Completar evidencias y revision final de P01 a P10.
+- Utilizar potenciometro de 10 kohm conforme al requisito.
+
+### 7. Control de versiones
+
+- Commit 14: 68ba147 - Comandos UART, telemetria y FIFO.
+- Commit 15: a9c2bd9 - Proteccion de cola TX ante interrupciones.
+
+Repositorio:
+https://github.com/2019-8753-itla/Segundo-Parcial-c-2019-8753
