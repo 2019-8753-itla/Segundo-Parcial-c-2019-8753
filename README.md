@@ -488,3 +488,37 @@ Los resultados fueron satisfactorios en las condiciones
 ensayadas. Las lineas STATUS y la telemetria automatica
 comparten formato, por lo que no se identifico cada
 respuesta STATUS de manera individual.
+
+
+## Validacion oficial P01-P10
+
+**Fecha:** 09/11/2026
+
+### Resultados de las pruebas
+
+| Prueba | Resultado | Estado |
+|---|---|---|
+| P01 - Arranque inicial | Compilacion limpia sin errores ni warnings. RUN, THR=70, PCT=0 y ALARM=0. | Aprobada |
+| P02 - Temporizacion | Telemetria: 9 intervalos de 1000 ms. ADC: ultimo intervalo observado de 100 ms. | Parcial |
+| P03 - Precision ADC | Minimo: 0 %. Mitad: 50 %. Maximo: 100 %. Formula de redondeo comprobada. | Parcial |
+| P04 - Histeresis | Secuencia PCT 60, 72, 67 y 62 con ALARM 0, 1, 1 y 0. | Aprobada |
+| P05 - Boton USER | Cinco pulsaciones produjeron cinco alternancias. Pulsacion mantenida durante 2 s sin repeticiones. | Funcionalmente aprobada |
+| P06 - RUN/PAUSE | STOP apaga la alarma; ADC y telemetria continuan. START con PCT cercano a 80 enciende la alarma. | Aprobada |
+| P07 - Umbrales validos | THR 50, 80, 10 y 95 aceptados correctamente. Alarma responde al cambio. | Aprobada |
+| P08 - Comandos invalidos | Seis comandos rechazados con seis ERR, sin alterar THR ni MODE. | Aprobada |
+| P09 - Protocolo UART | STATUS fragmentado, LF, CRLF, linea de 33 caracteres y recuperacion posterior comprobados. | Aprobada |
+| P10 - Estres y latencia | 148 comandos en prueba combinada, 0 ERR, 0 lineas inesperadas y 29 respuestas START/STOP. Latencia maxima medida: 16.23 ms. | Parcial |
+
+### Limitaciones de verificacion
+
+- P02: no se realizo medicion instrumental de todos los intervalos del LED PB13 ni un registro completo de intervalos ADC.
+- P03: no se midio Vin con multimetro; se verificaron lecturas ADC y porcentajes, pero no la tolerancia respecto a la tension real.
+- P05: no se inyectaron rebotes artificiales menores de 30 ms.
+- P10: las pruebas de comunicacion y latencia fueron satisfactorias; falta la comprobacion instrumental completa de las tolerancias temporales.
+- Se utilizo provisionalmente un potenciometro de 100 kohm en lugar del de 10 kohm solicitado.
+
+### Conclusion
+
+El firmware integra TIM6, ADC1, GPIO y USART2. Las pruebas funcionales realizadas muestran un comportamiento satisfactorio del sistema de monitoreo analogico, la alarma con histeresis, los modos RUN/PAUSE y la comunicacion UART.
+
+Las verificaciones instrumentales no realizadas quedan documentadas como pendientes.
