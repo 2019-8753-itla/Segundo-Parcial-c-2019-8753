@@ -434,3 +434,57 @@ perdidas ni latencia maxima de 100 ms.
 
 Repositorio:
 https://github.com/2019-8753-itla/Segundo-Parcial-c-2019-8753
+
+
+
+## Dia 5 - Validacion final de UART
+
+**Fecha:** 09/11/2026
+
+### Prueba de estres P10
+
+Se realizo una prueba de 30 segundos con PowerShell,
+enviando comandos STATUS aproximadamente 5 veces por segundo.
+
+Resultados:
+
+- STATUS enviados: 148.
+- Lineas de estado validas: 178.
+- Respuestas ERR: 0.
+- Lineas inesperadas: 0.
+- Desbordamientos RX: 0.
+- Desbordamientos TX: 0.
+
+### Prueba de latencia UART
+
+Se enviaron 20 comandos alternando START y STOP.
+
+- Respuestas correctas: 20 de 20.
+- Latencia maxima observada: 16.23 ms.
+- Latencia promedio observada: 15.37 ms.
+- Limite requerido: 100 ms.
+
+La medicion incluye el tiempo de PowerShell y Windows.
+
+### Prueba combinada P10
+
+Se ejecuto otra prueba de aproximadamente 30 segundos,
+alternando comandos STATUS, START y STOP mientras se
+variaba el potenciometro.
+
+Resultados:
+
+- Total de comandos enviados: 148.
+- STATUS enviados: 119.
+- START/STOP enviados: 29.
+- Lineas de estado validas: 150.
+- OK RUN recibidos: 14.
+- OK PAUSE recibidos: 15.
+- ERR recibidos: 0.
+- Lineas inesperadas: 0.
+- Fragmento pendiente: vacio.
+
+Los resultados fueron satisfactorios en las condiciones
+ensayadas. Las lineas STATUS y la telemetria automatica
+comparten formato, por lo que no se identifico cada
+respuesta STATUS de manera individual.
